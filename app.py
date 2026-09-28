@@ -45,6 +45,7 @@ from tenant_store import (
     community_nonprofits_helped,
     complete_workspace_project,
     create_account,
+    ensure_demo_account,
     ensure_volunteer_profile,
     find_invitation,
     find_profile_by_impact_token,
@@ -741,7 +742,30 @@ def render_volunteer_portal(token: str) -> None:
             st.caption("The nonprofit added a data-free version of your solution to the shared library, credited to you.")
 
 
+def app_setting(name: str) -> str:
+    """A setting from the environment, or from Streamlit Secrets (.streamlit/secrets.toml locally, the Secrets box when hosted)."""
+    value = os.environ.get(name, "")
+    if value:
+        return value
+    try:
+        return str(st.secrets.get(name, "") or "")
+    except Exception:  # No secrets file configured.
+        return ""
+
+
+@st.cache_resource(show_spinner=False)
+def prepare_demo_account(organization_name: str, email: str, password: str) -> str:
+    """Once per server start: the demo sign-in from secrets always works, even after a hosted app's storage resets."""
+    try:
+        ensure_demo_account(organization_name, email, password)
+    except ValueError as error:
+        return str(error)
+    return ""
+
+
 initialize_tenant_store()
+demo_settings = [app_setting(name) for name in ("TECH_BRIDGE_DEMO_ORG", "TECH_BRIDGE_DEMO_EMAIL", "TECH_BRIDGE_DEMO_PASSWORD")]
+demo_account_problem = prepare_demo_account(*demo_settings) if all(demo_settings) else ""
 
 if "impact" in st.query_params:
     render_impact_page(st.query_params["impact"])
@@ -811,6 +835,8 @@ if "tenant_account" not in st.session_state:
     st.markdown('<div class="eyebrow">Tech Bridge · Private nonprofit workspaces</div>', unsafe_allow_html=True)
     st.title("Your nonprofit workspace")
     st.caption("Each nonprofit account has its own projects and volunteer roster. Only approved, data-free solutions are shared in the library.")
+    if demo_account_problem:
+        st.warning(f"The demo account from the app's secrets couldn't be set up: {demo_account_problem}")
     render_milestone_banner()
     if st.button("Volunteer? Browse the public solution library"):
         st.query_params["library_search"] = ""

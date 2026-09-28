@@ -304,6 +304,34 @@ def authenticate(
     }
 
 
+def ensure_demo_account(
+    organization_name: str,
+    email: str,
+    password: str,
+    database_path: Path = DATABASE_PATH,
+) -> dict[str, str]:
+    """Make sure the demo sign-in from the app's secrets exists, so it survives a hosted app's storage resets.
+
+    Creates the account if it's missing; if the email exists with another password, the secrets' password wins.
+    """
+    account = authenticate(email, password, database_path)
+    if account:
+        return account
+    if len(password) < MIN_PASSWORD_LENGTH:
+        raise ValueError(f"Use a password with at least {MIN_PASSWORD_LENGTH} characters.")
+    with _connection(database_path) as connection:
+        exists = connection.execute("SELECT 1 FROM accounts WHERE email = ? COLLATE NOCASE", (email.strip(),)).fetchone()
+        if exists:
+            salt = secrets.token_bytes(16)
+            connection.execute(
+                "UPDATE accounts SET password_salt = ?, password_hash = ? WHERE email = ? COLLATE NOCASE",
+                (salt, _hash_password(password, salt), email.strip()),
+            )
+    if exists:
+        return authenticate(email, password, database_path)
+    return create_account(organization_name, email, password, database_path)
+
+
 def load_workspace(
     organization_id: str,
     database_path: Path = DATABASE_PATH,
