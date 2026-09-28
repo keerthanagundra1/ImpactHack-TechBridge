@@ -8,3 +8,5 @@ data/tech_bridge_tenants.sqlite3*
 # Local databases and their backups (emails, password hashes, private-link tokens)
 data/*.sqlite3
 data/*.sqlite3-*
+.env
+.env.*
