@@ -39,5 +39,12 @@ def test_the_secrets_password_wins_and_short_passwords_are_refused(db):
     ensure_demo_account(*DEMO, database_path=db)
     assert authenticate("demo@example.org", "example@1234", db)
     assert authenticate("demo@example.org", "an-older-password-1", db) is None
+
+
+def test_only_the_shared_demo_login_may_use_a_short_password(tmp_path):
+    path = tmp_path / "short.sqlite3"
+    initialize_tenant_store(path, json.loads(json.dumps(SEED_TEMPLATES)))
+    ensure_demo_account("Demo Org", "a@org", "a123", database_path=path)
+    assert authenticate("a@org", "a123", path)["organization_name"] == "Demo Org"
     with pytest.raises(ValueError, match="at least 12"):
-        ensure_demo_account("Other Org", "other@example.org", "short", database_path=db)
+        create_account("Real Pantry", "real@example.org", "a123", path)  # the sign-up form keeps the 12-character rule

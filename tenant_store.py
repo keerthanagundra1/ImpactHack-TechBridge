@@ -237,14 +237,17 @@ def create_account(
     email: str,
     password: str,
     database_path: Path = DATABASE_PATH,
+    *,
+    shared_demo_login: bool = False,
 ) -> dict[str, str]:
+    """Create a nonprofit account. Only the shared demo login from the app's secrets may skip the password-length rule."""
     organization_name = organization_name.strip()
     email = email.strip().casefold()
     if len(organization_name) < 2:
         raise ValueError("Enter your nonprofit's name.")
     if "@" not in email or email.startswith("@") or email.endswith("@"):
         raise ValueError("Enter a valid email address.")
-    if len(password) < MIN_PASSWORD_LENGTH:
+    if not password or (len(password) < MIN_PASSWORD_LENGTH and not shared_demo_login):
         raise ValueError(f"Use a password with at least {MIN_PASSWORD_LENGTH} characters.")
     organization_key = _organization_key(organization_name)
     if not organization_key:
@@ -313,12 +316,13 @@ def ensure_demo_account(
     """Make sure the demo sign-in from the app's secrets exists, so it survives a hosted app's storage resets.
 
     Creates the account if it's missing; if the email exists with another password, the secrets' password wins.
+    It's a shared demo login (fictional data only), so a short, easy password is allowed here and nowhere else.
     """
     account = authenticate(email, password, database_path)
     if account:
         return account
-    if len(password) < MIN_PASSWORD_LENGTH:
-        raise ValueError(f"Use a password with at least {MIN_PASSWORD_LENGTH} characters.")
+    if not password:
+        raise ValueError("Set a demo password.")
     with _connection(database_path) as connection:
         exists = connection.execute("SELECT 1 FROM accounts WHERE email = ? COLLATE NOCASE", (email.strip(),)).fetchone()
         if exists:
@@ -329,7 +333,7 @@ def ensure_demo_account(
             )
     if exists:
         return authenticate(email, password, database_path)
-    return create_account(organization_name, email, password, database_path)
+    return create_account(organization_name, email, password, database_path, shared_demo_login=True)
 
 
 def load_workspace(
